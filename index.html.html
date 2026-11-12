@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تلقين</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0d0f12;--panel:rgba(13,15,18,.72);--line:rgba(255,255,255,.16);--txt:#fff;--rec:#ff3b30;--mark:#ffd23f;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#0d0f12}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--ink);color:var(--txt);font-family:'Cairo',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;overflow:hidden}
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#000}
+#prompt{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);height:52%;overflow:hidden;
+ background:linear-gradient(rgba(0,0,0,.72),rgba(0,0,0,.5) 80%,rgba(0,0,0,0));padding:0 22px;
+ -webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent);touch-action:pan-y}
+#text{padding:38% 0 80%;font-weight:700;line-height:1.55;text-align:center;white-space:pre-wrap;text-shadow:0 1px 6px #000;font-size:34px}
+#text.mir{transform:scaleX(-1)}
+#line{position:fixed;right:0;left:0;top:calc(env(safe-area-inset-top,0px) + 17%);height:0;border-top:2px solid var(--mark);opacity:.55;pointer-events:none}
+#bar{position:fixed;left:0;right:0;bottom:0;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:var(--panel);
+ -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.sl{display:flex;align-items:center;gap:8px;flex:1;font-size:13px}
+.sl input{flex:1;min-width:0;accent-color:var(--mark)}
+button{font:inherit;color:var(--txt);background:rgba(255,255,255,.12);border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-height:44px;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+button.on{background:var(--mark);color:#111;border-color:var(--mark)}
+#rec{width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:transparent;padding:0;position:relative;flex:none}
+#rec::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--rec);transition:.15s}
+#rec.live::after{inset:20px;border-radius:8px}
+#main{margin-top:12px}
+#timer{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:14px;background:var(--rec);padding:2px 10px;border-radius:99px;font-size:14px;display:none;z-index:5}
+#count{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:140px;font-weight:900;background:rgba(0,0,0,.4);z-index:6}
+.sheet{position:fixed;inset:0;background:var(--ink);z-index:10;display:none;flex-direction:column;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));gap:12px}
+.sheet.show{display:flex}
+textarea{flex:1;width:100%;background:#171a20;color:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;font:inherit;font-size:18px;line-height:1.6;resize:none}
+video#out{flex:1;min-height:0;width:100%;border-radius:12px;background:#000;object-fit:contain}
+.hint{font-size:13px;opacity:.75;margin:0}
+#err{position:fixed;inset:0;display:none;z-index:20;background:var(--ink);padding:30px;text-align:center;align-items:center;justify-content:center;flex-direction:column;gap:14px;line-height:1.7}
+</style>
+</head>
+<body>
+<video id="cam" autoplay playsinline muted></video>
+<div id="prompt"><div id="text"></div></div>
+<div id="line"></div>
+<div id="timer">00:00</div>
+<div id="count"></div>
+
+<div id="bar">
+  <div class="row">
+    <button id="edit">النص</button>
+    <button id="play">تشغيل التمرير</button>
+    <button id="rec" aria-label="تسجيل"></button>
+    <button id="flip">قلب الكاميرا</button>
+    <button id="mir">مرآة النص</button>
+  </div>
+  <div class="row" id="main">
+    <label class="sl">السرعة <input id="spd" type="range" min="10" max="200" value="55"></label>
+    <label class="sl">الخط <input id="fs" type="range" min="20" max="64" value="34"></label>
+  </div>
+</div>
+
+<div class="sheet" id="editor">
+  <p class="hint">الصق نصك هنا. يُحفظ تلقائياً على جهازك.</p>
+  <textarea id="src" placeholder="اكتب أو الصق النص..."></textarea>
+  <button id="done" class="on">حفظ والعودة</button>
+</div>
+
+<div class="sheet" id="result">
+  <video id="out" controls playsinline></video>
+  <p class="hint">لحفظ الفيديو: اضغط «مشاركة» ثم «حفظ الفيديو»، أو اضغط مطولاً على الفيديو.</p>
+  <div class="row">
+    <button id="share" class="on" style="flex:1">مشاركة / حفظ</button>
+    <button id="again" style="flex:1">تسجيل جديد</button>
+  </div>
+</div>
+
+<div id="err"><div id="errmsg"></div><button id="retry" class="on">إعادة المحاولة</button></div>
+
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var cam=$('cam'),text=$('text'),box=$('prompt');
+  var DEF='مرحباً بكم في قناتي.\nاليوم سأحدثكم عن موضوع مهم.\n\nاستبدل هذا النص بنصك أنت،\nواضغط على زر التسجيل، ثم اقرأ بهدوء وأنت تنظر إلى العدسة.';
+  var stream=null,facing='user',rec=null,chunks=[],mime='',blob=null;
+  var pos=0,playing=false,last=0,tInt=null,sec=0;
+
+  function load(k,d){try{var v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}}
+  function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+  text.textContent=load('tp_text',DEF);
+  $('src').value=text.textContent;
+  $('spd').value=load('tp_spd','55');
+  $('fs').value=load('tp_fs','34');
+  text.style.fontSize=$('fs').value+'px';
+  if(load('tp_mir','0')==='1'){text.classList.add('mir');$('mir').classList.add('on')}
+
+  function showErr(m){$('errmsg').textContent=m;$('err').style.display='flex'}
+  async function startCam(){
+    try{
+      if(stream)stream.getTracks().forEach(function(t){t.stop()});
+      stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:true});
+      cam.srcObject=stream;
+      cam.style.transform=facing==='user'?'scaleX(-1)':'none';
+      $('err').style.display='none';
+    }catch(e){
+      showErr('لم نتمكن من فتح الكاميرا. اسمح بالوصول للكاميرا والميكروفون من إعدادات المتصفح. إن كانت الصفحة داخل تطبيق، افتحها في Safari أو Chrome مباشرة.');
+    }
+  }
+  $('retry').onclick=startCam;
+  $('flip').onclick=function(){if(rec&&rec.state==='recording')return;facing=facing==='user'?'environment':'user';startCam()};
+
+  function loop(t){
+    if(playing){
+      var dt=(t-last)/1000;last=t;
+      pos+=dt*Number($('spd').value);
+      var max=box.scrollHeight-box.clientHeight;
+      if(pos>=max){pos=max;setPlay(false)}
+      box.scrollTop=pos;
+    }else last=t;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  function setPlay(v){playing=v;$('play').classList.toggle('on',v);$('play').textContent=v?'إيقاف التمرير':'تشغيل التمرير'}
+  $('play').onclick=function(){setPlay(!playing)};
+  box.addEventListener('scroll',function(){if(!playing)pos=box.scrollTop});
+
+  $('spd').oninput=function(){save('tp_spd',this.value)};
+  $('fs').oninput=function(){text.style.fontSize=this.value+'px';save('tp_fs',this.value)};
+  $('mir').onclick=function(){var on=text.classList.toggle('mir');this.classList.toggle('on',on);save('tp_mir',on?'1':'0')};
+
+  $('edit').onclick=function(){setPlay(false);$('editor').classList.add('show')};
+  $('done').onclick=function(){text.textContent=$('src').value||DEF;save('tp_text',$('src').value);pos=0;box.scrollTop=0;$('editor').classList.remove('show')};
+
+  function pickMime(){
+    var c=['video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+    for(var i=0;i<c.length;i++){if(window.MediaRecorder&&MediaRecorder.isTypeSupported(c[i]))return c[i]}
+    return '';
+  }
+  function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+
+  function countdown(n,cb){
+    var el=$('count');el.style.display='flex';el.textContent=n;
+    var iv=setInterval(function(){n--;if(n<=0){clearInterval(iv);el.style.display='none';cb()}else el.textContent=n},1000);
+  }
+  function startRec(){
+    if(!stream||!window.MediaRecorder){showErr('هذا المتصفح لا يدعم التسجيل. جرّب Safari أو Chrome حديث.');return}
+    chunks=[];mime=pickMime();
+    try{rec=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){rec=new MediaRecorder(stream)}
+    rec.ondataavailable=function(e){if(e.data&&e.data.size)chunks.push(e.data)};
+    rec.onstop=function(){
+      blob=new Blob(chunks,{type:rec.mimeType||mime||'video/mp4'});
+      var o=$('out');o.src=URL.createObjectURL(blob);
+      $('result').classList.add('show');
+    };
+    rec.start(1000);
+    $('rec').classList.add('live');
+    sec=0;$('timer').textContent='00:00';$('timer').style.display='block';
+    tInt=setInterval(function(){sec++;$('timer').textContent=fmt(sec)},1000);
+    pos=0;box.scrollTop=0;setPlay(true);
+  }
+  function stopRec(){
+    if(rec&&rec.state!=='inactive')rec.stop();
+    clearInterval(tInt);$('timer').style.display='none';
+    $('rec').classList.remove('live');setPlay(false);
+  }
+  $('rec').onclick=function(){
+    if(rec&&rec.state==='recording'){stopRec();return}
+    countdown(3,startRec);
+  };
+  $('again').onclick=function(){$('result').classList.remove('show');$('out').removeAttribute('src');pos=0;box.scrollTop=0};
+  $('share').onclick=async function(){
+    if(!blob)return;
+    var ext=(blob.type.indexOf('mp4')>-1)?'mp4':'webm';
+    var f=new File([blob],'video-'+Date.now()+'.'+ext,{type:blob.type});
+    try{
+      if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}
+    }catch(e){if(e&&e.name==='AbortError')return}
+    alert('اضغط مطولاً على الفيديو لحفظه، أو افتح الصفحة في Safari/Chrome مباشرة وجرّب مرة أخرى.');
+  };
+
+  startCam();
+})();
+</script>
+</body>
+</html>
