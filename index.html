@@ -201,13 +201,30 @@ video#out{flex:1;min-height:0;width:100%;border-radius:12px;background:#000;obje
 
   /* ---------- camera ---------- */
   function showErr(m){$('errmsg').textContent=m;$('err').style.display='flex'}
+  var E={
+   en:{perm:'Camera access is blocked. Click the lock or camera icon next to the address bar (or menu ⋮ → Settings), allow Camera and Microphone, then tap Retry.',busy:'The camera is being used by another app (Teams, Zoom, OBS...). Close it, then tap Retry.',none:'No camera was found on this device.',nomic:'No microphone available: the recording will have no sound.'},
+   ar:{perm:'الوصول للكاميرا محظور. اضغط أيقونة القفل أو الكاميرا بجانب شريط العنوان (أو ⋮ ← الإعدادات)، واسمح بالكاميرا والميكروفون ثم اضغط إعادة المحاولة.',busy:'الكاميرا مستخدمة من تطبيق آخر (Teams أو Zoom أو OBS...). أغلقه ثم اضغط إعادة المحاولة.',none:'لم يتم العثور على كاميرا في هذا الجهاز.',nomic:'لا يوجد ميكروفون متاح: سيكون التسجيل بلا صوت.'},
+   tr:{perm:'Kamera erişimi engelli. Adres çubuğunun yanındaki kilit veya kamera simgesine tıkla (veya menü ⋮ → Ayarlar), Kamera ve Mikrofon izni ver, sonra Tekrar dene\'ye dokun.',busy:'Kamera başka bir uygulama tarafından kullanılıyor (Teams, Zoom, OBS...). Kapat, sonra Tekrar dene\'ye dokun.',none:'Bu cihazda kamera bulunamadı.',nomic:'Mikrofon yok: kayıt sessiz olacak.'}
+  };
   async function startCam(){
+    if(stream)stream.getTracks().forEach(function(t){t.stop()});
+    stream=null;
+    var vc={facingMode:facing,width:{ideal:1920},height:{ideal:1080}};
     try{
-      if(stream)stream.getTracks().forEach(function(t){t.stop()});
-      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:true});
+      try{stream=await navigator.mediaDevices.getUserMedia({video:vc,audio:true})}
+      catch(e1){
+        stream=await navigator.mediaDevices.getUserMedia({video:true});
+        alert(E[lang].nomic);
+      }
       cam.srcObject=stream;cam.style.transform=facing==='user'?'scaleX(-1)':'none';
       $('err').style.display='none';
-    }catch(e){showErr(T.errCam)}
+    }catch(e){
+      var n=e&&e.name,m=T.errCam;
+      if(n==='NotAllowedError'||n==='SecurityError')m=E[lang].perm;
+      else if(n==='NotReadableError'||n==='AbortError')m=E[lang].busy;
+      else if(n==='NotFoundError'||n==='OverconstrainedError')m=E[lang].none;
+      showErr(m);
+    }
   }
   $('retry').onclick=startCam;
   $('flip').onclick=function(){if(recording)return;facing=facing==='user'?'environment':'user';startCam()};
